@@ -57,6 +57,8 @@ columns_to_remove <- names(na_percent[na_percent >= 10])
 # Remove the columns with 20% or more NAs from the dataset
 vdem <- vdem[, !(names(vdem) %in% columns_to_remove)]
 
+vdem <- vdem |> 
+  select(year, v2x_partipdem_codelow, v2x_polyarchy)
 
 ```
 
@@ -106,9 +108,39 @@ bm
 Now Let's test out of sample.
 
 ```{r}
-predictions <- predict(bm, y_test)
+predictions <- predict(bm, test_data)
 accuracy <- mean((predictions - y_test)^2)
 cat("Test accuracy (MSE):", accuracy)
 ```
 
+```{r}
+vs <- var_selection_by_permute(bm,
+                               num_permute_samples = 10,
+                               bottom_margin = 1)
+```
+
+```{r}
+vs <- var_selection_by_permute_cv(bm, k_folds = 2,
+                                  num_permute_samples = 10)
+```
+
+```{r}
+vdem_selected <- train_data |> 
+  select(vs$important_vars_cv)
+
+```
+
+
+```{r}
+bm_select <- bartMachine(y=y_train, X = train_data)
+
+bm_select
+```
+
+```{r}
+for (i in 1:length(vs$important_vars_cv)) {
+  pd_plot(bm_select, j = vs$important_vars_cv[i])
+
+}
+```
 
