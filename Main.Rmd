@@ -1,0 +1,114 @@
+---
+title: "Seeing Democracy Through the Trees"
+author: "Daniel K Baissa"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+
+require(rJava)
+# options(java.parameters = "-Xmx50g")     # or 8g, or larger than this, ...
+
+options(java.parameters = "-Xmx8g")     # or 8g, or larger than this, ...
+require(bartMachine)
+set_bart_machine_num_cores(5)
+```
+
+Load in Vdem Data
+
+```{r}
+vdem <- readRDS("~/R Projects/Democracy_Prediction/Vdem_data/V-Dem-CY-Full+Others-v13.rds")
+```
+
+This dataset is the Country-Year: V-Dem Core
+
+
+
+v2x_polyarchy will be our democracy indicator so the other higher level indicators will need to be removed.
+
+v2x_egaldem
+v2x_delibdem
+v2x_partipdem
+v2x_libdem
+
+```{r}
+vdem <- vdem |> 
+  select(-c(v2x_egaldem, v2x_delibdem, v2x_partipdem, v2x_libdem))
+```
+
+
+
+Now let's look for clumns with NAs
+
+```{r}
+# Calculate the percentage of NAs in each column
+na_percent <- colMeans(is.na(vdem)) * 100
+
+# Find the columns with 20% or more NAs
+columns_to_remove <- names(na_percent[na_percent >= 10])
+
+# Remove the columns with 20% or more NAs from the dataset
+vdem <- vdem[, !(names(vdem) %in% columns_to_remove)]
+
+
+```
+
+Now let's break the data into a training set and a testing set. We will do this by randomly sampling 80% of the data into the training and 20% into the testing datasets.
+
+```{r}
+set.seed(123)
+split_idx <- sample(1:nrow(vdem), floor(0.8 * nrow(vdem)))
+train_data <- vdem[split_idx, ]
+test_data <- vdem[-split_idx, ]
+
+```
+
+
+For fiting this BART model, I will do some basic data orginziation in order to make the process easily interpretible.
+
+We will break the data into 2 components. 1) the y variable and 2) the x variables.
+
+```{r}
+train_data <- train_data |> 
+  na.omit() 
+
+y_train <- train_data$v2x_polyarchy
+
+train_data$v2x_polyarchy <- NULL
+
+test_data <- test_data |> 
+  na.omit() 
+
+y_test <- test_data$v2x_polyarchy
+
+test_data$v2x_polyarchy <-NULL
+
+```
+
+
+
+
+Now let's fit the BART model
+
+```{r}
+bm <- bartMachine(y=y_train, X = train_data)
+
+bm
+```
+
+Now Let's test out of sample.
+
+```{r}
+predictions <- predict(bm, y_test)
+accuracy <- mean((predictions - y_test)^2)
+cat("Test accuracy (MSE):", accuracy)
+```
+
+
